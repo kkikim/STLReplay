@@ -27,7 +27,7 @@ private:
 	float mX, mY;							// 위치
 	float mR = 1.0f, mG = 0.0f, mB = 0.5f;		// 색상
 };
-//--------------함수 선언 구간--------------------
+//--------------함수 선언 구간---------------------------
 GLvoid inputFile();
 GLvoid outputFile();
 GLvoid drawScene(GLvoid);
@@ -37,14 +37,22 @@ GLvoid TimerFunction(int value);
 GLvoid Keyboard(unsigned char key, int x, int y);
 GLvoid Init();
 GLvoid MenuFunc(int button);
-//-------------------------------------------------
+GLvoid changeNormalMode();
+GLvoid stepPlay();
+//------------------------------------------------------
+//--------------컨테이너 / 전역변수 선언 구간-----------
 vector<Point> point;					//좌푝값 담는 벡터
 vector<Point>::iterator piter;
+vector<Point>::iterator piterForStep;
 vector<double> pointTime;					//시간값 담는 벡터
 vector<double>::iterator Titer;
 default_random_engine dre;
 uniform_real_distribution<GLfloat> ui(0.2, 0.95);
 chrono::system_clock::time_point start = chrono::system_clock::now();
+bool replayOn = false;
+bool Stop = false;
+bool Step = false;
+//-------------------------------------------------------
 void main(int argc, char *argv[])
 {
 	//초기화 함수들 
@@ -70,18 +78,53 @@ GLvoid drawScene(GLvoid)
 	glPointSize(5.0f);
 	glBegin(GL_POINTS);
 	//여기에 반복문으로 그려줌.
-	if (point.size() != 0)
+	cout << replayOn << endl;
+	if (!replayOn)
 	{
-		for (piter = point.begin(); piter != point.end(); ++piter)
+		if (point.size() != 0)
 		{
-			piter->draw();
+			for (piter = point.begin(); piter != point.end(); ++piter)
+			{
+				piter->draw();
+			}
+		}
+	}
+	else if (replayOn)
+	{
+		if (point.size() != 0)
+		{
+			for (auto & pt : point)
+			{
+				pt.draw();
+				
+				if (!Stop) 
+				{
+					if (&(*piter) == &pt)
+						break;
+				}
+			}
+		}
+	}
+	else if (Step)
+	{
+		if (point.size() != 0)
+		{
+			for (auto & pt : point)
+			{
+				pt.draw();
+
+				if (!Stop) 
+				{
+					if (&(*piter) == &pt)
+						break;
+				}
+			}
 		}
 	}
 	glEnd();
 	glFlush(); // 화면에 출력하기
 }
-
-void Mouse(int button, int state, int x, int y)
+GLvoid Mouse(int button, int state, int x, int y)
 {
 	if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN)
 	{
@@ -95,13 +138,39 @@ void Mouse(int button, int state, int x, int y)
 }
 void TimerFunction(int value)
 {
-	if (point.size() != 0)
+	if (!point.empty())
 	{
-		for (piter = point.begin(); piter != point.end(); ++piter)
+		for (auto & pt : point)
 		{
-			piter->setColor(ui(dre), ui(dre), ui(dre));
+			pt.setColor(ui(dre), ui(dre), ui(dre));
+			
+			if (replayOn && !Stop) {
+				if (&(*piter) == &pt)
+					break;
+			}
 		}
 	}
+	//--------------리플레이 온--------
+	if (replayOn)
+	{
+		chrono::duration<double> sec = chrono::system_clock::now() - start;
+		if (Titer != pointTime.end())
+		{
+			if (sec.count() >= *Titer)
+			{
+				cout << "zz" << endl;
+				//piter->draw();
+				cout << *Titer << endl;
+				if (piter != point.end())
+					++piter;
+				if (Titer != pointTime.end())
+					++Titer;
+				if (Titer == pointTime.end())
+					Stop = true;
+			}
+		}
+	}
+
 	glutPostRedisplay(); // 화면 재 출력
 	glutTimerFunc(100, TimerFunction, 1); // 타이머함수 재 설정f
 }
@@ -110,7 +179,14 @@ GLvoid Keyboard(unsigned char key, int x, int y)
 {
 	switch (key)
 	{
+	case 'x':
+	case 'X':
+		if (piter != point.end())
+			++piter;
+		if (piter == point.end())
+			Stop = true;
 
+		break;
 	}
 
 }
@@ -120,12 +196,12 @@ GLvoid Init()
 	point.reserve(500);
 	pointTime.reserve(500);
 	int mainMenu = glutCreateMenu(MenuFunc);
-	glutAddMenuEntry("리플레이 모드", 1);
+	glutAddMenuEntry("리플레이 모드", 1);		//replayon 변수 트루로.
 	glutAddMenuEntry("리플레이 저장", 2);
 	glutAddMenuEntry("일반 모드", 3);
+	glutAddMenuEntry("단계별 재생",4);
 	glutAttachMenu(GLUT_RIGHT_BUTTON);
 }
-
 GLvoid Reshape(int w, int h)
 {
 	glViewport(0, 0, w, h);
@@ -145,8 +221,11 @@ GLvoid MenuFunc(int button)
 		//파일에 저장하는 함수
 		break;
 	case 3:
+		changeNormalMode();
 		//일반모드 전환함수
 		break;
+	case 4:
+		stepPlay();
 	}
 	glutPostRedisplay();
 }
@@ -166,14 +245,55 @@ GLvoid outputFile()
 	double a, b, c;
 	point.clear();
 	pointTime.clear();
-	while (!in.eof())
+	while (in >> a >> b >> c)
 	{
-		in >> a >> b >> c;
+		//in >> a >> b >> c;
 		point.push_back(Point(a, b));
 		pointTime.push_back(c);
+		cout << a << "\t" << b << "\t" << c << endl;
 		if (in.eof())
 			break;
-		cout << a << "\t" << b << "\t" << c << endl;
 		//tempinfo.push_back(temp);
 	}
+	for (auto time : pointTime)
+	{
+		cout << time;
+	}
+
+	cout << endl;
+	replayOn = true;
+	start = chrono::system_clock::now();
+	Titer = pointTime.begin();
+	piter = point.begin();
+}
+GLvoid changeNormalMode()
+{
+	replayOn = false;
+	point.clear();
+	pointTime.clear();
+}
+GLvoid stepPlay()
+{
+	Step = true;
+	ifstream in("Data.txt");
+	double a, b, c;
+	point.clear();
+	pointTime.clear();
+	while (in >> a >> b >> c)
+	{
+		//in >> a >> b >> c;
+		point.push_back(Point(a, b));
+		pointTime.push_back(c);
+		cout << a << "\t" << b << "\t" << c << endl;
+		if (in.eof())
+			break;
+		//tempinfo.push_back(temp);
+	}
+	cout << endl;
+	replayOn = false;
+	start = chrono::system_clock::now();
+	Titer = pointTime.begin();
+	piter = point.begin();
+	piterForStep = point.begin();
+	Stop = false;
 }
